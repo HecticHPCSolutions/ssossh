@@ -1,0 +1,28 @@
+<html>
+    <head>
+    </head>
+    <body>
+        You may now close this window
+    </body>
+    <script>
+        function reqListener () {
+        }
+        let frag = window.location.hash;
+        tokenmatch = frag.match(/access_token\=([^&]+)(&|$)/);
+        statematch = frag.match(/state\=([^&]+)(&|$)/);
+        let accesstoken = tokenmatch[1];
+        let state = statematch[1];
+        console.log(accesstoken);
+        console.log(state);
+
+        xhttp = new XMLHttpRequest();
+        xhttp.addEventListener("load", reqListener);
+        xhttp.open("GET",'http://localhost:{{ port }}/extract?token='+accesstoken+'&state='+state);
+        xhttp.send()
+        xhttp = new XMLHttpRequest();
+        xhttp.open("GET",'{{ logout }}',true);
+        xhttp.withCredentials=true;
+        xhttp.send(null);
+    </script>
+</html>
+

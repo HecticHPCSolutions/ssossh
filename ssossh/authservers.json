@@ -1,0 +1,27 @@
+[
+
+    {
+      "authorise": "https://sshauthz.cloud.cvl.org.au/pysshauthz/oauth2/oauth/authorize/choose",
+      "base": "https://sshauthz.cloud.cvl.org.au/pysshauthz/oauth2/",
+      "client_id": "Q96kt2Vtw6S78dpORktM81DH",
+      "sign": "https://sshauthz.cloud.cvl.org.au/pysshauthz/sign/monash_hpcid/api/v1/sign_key",
+      "logout": "https://sshauthz.cloud.cvl.org.au/pysshauthz/oauth2/logout",
+      "name": "CVL",
+      "icon": null,
+      "scope": "user:email",
+      "cafp": "RSA SHA256:cmDxHrZQSPlBMUUcI/BWmruXho1XOzfXPDHSqVTwV2I",
+      "desc": "<div><div>Don't have an account?</div><div style=\"height:25px\"></div><div><a href=https://docs.massive.org.au/M3/requesting-an-account.html style=\"text-decoration: none\">Signup</a></div><div style=\"height:25px\"></div></div>"
+    },
+    {
+      "authorise": "http://localhost:5000/oauth2/oauth/authorize/choose",
+      "base": "http://localhost:5000/oauth2/",
+      "client_id": "Q96kt2Vtw6S78dpORktM81DH",
+      "sign": "http://localhost:5000/sign/monash_hpcid/api/v1/sign_key",
+      "logout": "http://localhost:5000/oauth2/logout",
+      "name": "Local SSHAuthZ (testing/dev)",
+      "icon": null,
+      "scope": "user:email",
+      "cafp": "RSA SHA256:cmDxHrZQSPlBMUUcI/BWmruXho1XOzfXPDHSqVTwV2I",
+      "desc": "<div><div>Don't have an account?</div><div style=\"height:25px\"></div><div><a href=https://docs.massive.org.au/M3/requesting-an-account.html style=\"text-decoration: none\">Signup</a></div><div style=\"height:25px\"></div></div>"
+    }
+]
