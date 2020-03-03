@@ -67,7 +67,8 @@ setup(
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
         'jinja2',
-        'requests'
+        'requests',
+        " importlib_resources ; python_version<'3.7'"
             ],
 
 
