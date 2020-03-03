@@ -22,6 +22,7 @@ setup(
 
     description=long_description,
     long_description=long_description,
+    include_package_data=True,
 
     # The project's main homepage.
     url='https://gitlab.erc.monash.edu.au/hpc-team/ssossh',
