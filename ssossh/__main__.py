@@ -8,6 +8,11 @@ import pathlib
 from functools import partial
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from jinja2 import Template
+try:
+    import importlib.resources as pkg_resources
+except ImportError:
+    # Try backported to PY<37 `importlib_resources`.
+    import importlib_resources as pkg_resources
 
 q = queue.Queue()
 
@@ -32,11 +37,11 @@ class MyRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self, *args, **kwargs):
         if "callback" in self.path:
             self._set_headers()
-            currpath = pathlib.Path(__file__).parent.absolute()
-            with open(os.path.join(currpath, 'templates', 'call_back.html'),
-                      'rb') as f:
+            from . import templates
+            with pkg_resources.open_text(templates,
+                    'call_back.html') as f:
                 tsrc = f.read()
-                t = Template(tsrc.decode())
+                t = Template(tsrc)
                 self.wfile.write(t.render(port=self.port,
                                           logout=self.logout).encode())
             return
@@ -152,8 +157,8 @@ def main():
     Use the OAuth2 token to create a certificate from the pub key
     Add the certificate to the users agent
     """
-    currpath = pathlib.Path(__file__).parent.absolute()
-    with open(os.path.join(currpath, 'authservers.json'), 'r') as f:
+    from . import config
+    with pkg_resources.open_text(config,'authservers.json') as f:
         config = json.loads(f.read())
         authservice = config[0]
 
