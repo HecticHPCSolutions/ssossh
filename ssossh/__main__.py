@@ -76,7 +76,7 @@ def make_key():
                 pass
     except FileNotFoundError:
         pass
-    subprocess.call(['ssh-keygen', '-N', '', '-f', keypath],
+    subprocess.call(['ssh-keygen', '-t', 'ecdsa', '-N', '', '-f', keypath],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
     return keypath
