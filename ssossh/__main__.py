@@ -45,8 +45,9 @@ class MyRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(t.render(port=self.port,
                                           logout=self.logout).encode())
             return
-        else:
-            q.put(self.path)
+        if "favicon.ico" in self.path:
+            self.send_error(404,message="No favicon here")
+        q.put(self.path)
 
 
 def make_key():
@@ -94,7 +95,11 @@ def sign_cert(keypath, token, url):
     headers = {"Authorization": "Bearer {}".format(token)}
     data = {"public_key": pub_key}
     resp = sess.post(url, json=data, headers=headers, verify=False)
-    data = resp.json()
+    try:
+        data = resp.json()
+    except:
+        print(resp.status_code)
+        print(resp.text)
     cert = data['certificate']
     with open(keypath + "-cert.pub", 'w') as f:
         f.write(cert)
@@ -141,11 +146,13 @@ def do_request(authservice):
     httpd.handle_request()
     httpd.handle_request()
     path = q.get()
+    if 'favicon.ico' in path:
+        httpd.handle_request()
     params = path.split('?')[1].split('&')
     token = params[0].split('=')[1]
     state = params[1].split('=')[1]
     if not state == nonce:
-        raise Exception('OAuth2 error: A securit check failed')
+        raise Exception('OAuth2 error: A security check failed. Nonce is {} state is {}'.format(nonce,state))
     return token
 
 
@@ -158,9 +165,14 @@ def main():
     Add the certificate to the users agent
     """
     from . import config
+    import os
+    if os.path.exists(os.path.expanduser('~/.authservers.json')):
+        with open(os.path.expanduser('~/.authservers.json'),'r') as f:
+            config = json.loads(f.read())
     with pkg_resources.open_text(config,'authservers.json') as f:
         config = json.loads(f.read())
-        authservice = config[0]
+
+    authservice = config[0]
 
     token = do_request(authservice)
     path = make_key()
