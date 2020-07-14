@@ -77,7 +77,7 @@ def make_key():
                 pass
     except FileNotFoundError:
         pass
-    subprocess.call(['ssh-keygen', '-t', 'ecdsa', '-N', '', '-f', keypath],
+    subprocess.call(['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', keypath],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
     return keypath
@@ -169,8 +169,9 @@ def main():
     if os.path.exists(os.path.expanduser('~/.authservers.json')):
         with open(os.path.expanduser('~/.authservers.json'),'r') as f:
             config = json.loads(f.read())
-    with pkg_resources.open_text(config,'authservers.json') as f:
-        config = json.loads(f.read())
+    else:
+        with pkg_resources.open_text(config,'authservers.json') as f:
+            config = json.loads(f.read())
 
     authservice = config[0]
 

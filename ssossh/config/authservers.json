@@ -1,11 +1,11 @@
 [
 
     {
-      "authorise": "https://sshauthz.cloud.cvl.org.au/pysshauthz/oauth2/oauth/authorize/choose",
-      "base": "https://sshauthz.cloud.cvl.org.au/pysshauthz/oauth2/",
+      "authorise": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/oauth/authorize/choose",
+      "base": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/",
       "client_id": "Q96kt2Vtw6S78dpORktM81DH",
-      "sign": "https://sshauthz.cloud.cvl.org.au/pysshauthz/sign/monash_hpcid/api/v1/sign_key",
-      "logout": "https://sshauthz.cloud.cvl.org.au/pysshauthz/oauth2/logout",
+      "sign": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/sign/monash_hpcid/api/v1/sign_key",
+      "logout": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/logout",
       "name": "CVL",
       "icon": null,
       "scope": "user:email",
