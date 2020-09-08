@@ -48,6 +48,8 @@ class MyRequestHandler(BaseHTTPRequestHandler):
         if "favicon.ico" in self.path:
             self.send_error(404,message="No favicon here")
         q.put(self.path)
+    def log_message(self, format, *args):
+        return
 
 
 def make_key():
