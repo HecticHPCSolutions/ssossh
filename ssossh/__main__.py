@@ -94,7 +94,7 @@ def sign_cert(keypath, token, url):
     sess = requests.Session()
     headers = {"Authorization": "Bearer {}".format(token)}
     data = {"public_key": pub_key}
-    resp = sess.post(url, json=data, headers=headers, verify=False)
+    resp = sess.post(url, json=data, headers=headers, verify=True)
     try:
         data = resp.json()
     except:
@@ -155,6 +155,15 @@ def do_request(authservice):
         raise Exception('OAuth2 error: A security check failed. Nonce is {} state is {}'.format(nonce,state))
     return token
 
+def select_service(config):
+    prompt="Enter the number of the site you would like to login to:\n"
+    n=0
+    for s in config:
+        n=n+1
+        prompt=prompt+"{}: {}\n".format(n,s['name'])
+
+    v = input(prompt)
+    return int(v)-1
 
 def main():
     """
@@ -173,7 +182,11 @@ def main():
         with pkg_resources.open_text(config,'authservers.json') as f:
             config = json.loads(f.read())
 
-    authservice = config[0]
+    if len(config) > 1:
+        service = select_service(config)
+    else:
+        service = 0
+    authservice = config[service]
 
     token = do_request(authservice)
     path = make_key()
