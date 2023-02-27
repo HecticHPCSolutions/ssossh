@@ -63,7 +63,8 @@ def make_key():
         import stat
         if stat.S_ISREG(mode):
             try:
-                rm_key_agent(keypath)
+                pass
+                #rm_key_agent(keypath)
             except subprocess.CalledProcessError:
                 pass
             try:
@@ -117,13 +118,14 @@ def rm_key_agent(keypath):
                     stderr=subprocess.DEVNULL)
 
 
-def add_key_agent(keypath):
+def add_key_agent(keypath, expiry):
     """
     Add the key and cert to the agent
     """
-    subprocess.call(['ssh-add', keypath],
+    p = subprocess.Popen(['ssh-add', '-t',str(int(expiry)), keypath],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
+    (stdout, stderr) = p.communicate()
 
 
 def do_request(authservice):
@@ -158,6 +160,38 @@ def do_request(authservice):
         raise Exception('OAuth2 error: A security check failed. Nonce is {} state is {}'.format(nonce,state))
     return token
 
+
+def parse_cert_contents(lines):
+    key = None
+    values = []
+    res = {}
+    for l in lines:
+        l = l.rstrip().lstrip()
+        if ':' in l:
+            if key is not None:
+                res[key] = values
+            values = []
+            (key,v) = l.split(':',1)
+            v = v.lstrip().rstrip()
+            if v != '':
+                values = [v]
+        else:
+            if l != '':
+                values.append(l)
+    return res
+
+
+def get_cert_expiry(path):
+    import datetime
+    p = subprocess.Popen(['ssh-keygen','-L','-f',path],stdin=None,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    keygenout,keygenerr = p.communicate()
+    # Examine the cert to determine its expiry. Use the -t flag to automatically remove from the ssh-agent when the cert expires
+    certcontents = parse_cert_contents(keygenout.decode().splitlines())
+    endtime = datetime.datetime.strptime(certcontents['Valid'][0].split()[3],"%Y-%m-%dT%H:%M:%S")
+    delta = endtime - datetime.datetime.now() # I *think* the output of ssh-keygen -L is in the current timezone even though I assume the certs validity is in UTC
+    return delta
+
+
 def select_service(config):
     prompt="Enter the number of the site you would like to login to:\n"
     n=0
@@ -178,12 +212,17 @@ def main():
     """
     from . import config
     import os
-    if os.path.exists(os.path.expanduser('~/.authservers.json')):
-        with open(os.path.expanduser('~/.authservers.json'),'r') as f:
+    import sys
+    if len(sys.argv) > 1:
+        with open(sys.argv[1],'r') as f:
             config = json.loads(f.read())
     else:
-        with pkg_resources.open_text(config,'authservers.json') as f:
-            config = json.loads(f.read())
+        if os.path.exists(os.path.expanduser('~/.authservers.json')):
+            with open(os.path.expanduser('~/.authservers.json'),'r') as f:
+                config = json.loads(f.read())
+        else:
+            with pkg_resources.open_text(config,'authservers.json') as f:
+                config = json.loads(f.read())
 
     if len(config) > 1:
         service = select_service(config)
@@ -194,4 +233,6 @@ def main():
     token = do_request(authservice)
     path = make_key()
     sign_cert(path, token, authservice['sign'])
-    add_key_agent(path)
+    expiry = get_cert_expiry("{}-cert.pub".format(path))
+    print("cert will expire {}".format(expiry))
+    add_key_agent(path, expiry.total_seconds())
