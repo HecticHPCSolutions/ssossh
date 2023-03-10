@@ -8,7 +8,6 @@ import requests
 import pathlib
 from functools import partial
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from jinja2 import Template
 try:
     import importlib.resources as pkg_resources
 except ImportError:
@@ -36,37 +35,35 @@ class MyRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self, *args, **kwargs):
+        from . import templates
+        with pkg_resources.open_text(templates,
+                'call_back.html') as f:
+            tsrc = f.read()
+            rsrc = tsrc.replace('{{ port }}',str(self.port)).replace('{{ logout }}',self.logout).encode()
         if "callback" in self.path:
             self._set_headers()
-            from . import templates
-            with pkg_resources.open_text(templates,
-                    'call_back.html') as f:
-                tsrc = f.read()
-                t = Template(tsrc)
-                self.wfile.write(t.render(port=self.port,
-                                          logout=self.logout).encode())
+            self.wfile.write(rsrc)
+            self.send_response(200)
             return
         if "favicon.ico" in self.path:
+            print('favicon requested, send 404')
             self.send_error(404,message="No favicon here")
-        q.put(self.path)
+        if "extract" in self.path:
+            self._set_headers()
+            self.wfile.write(rsrc)
+            self.send_response(200)
+            #self.send_response(204)
+            self.wfile.write(b"")
+            q.put(self.path)
     def log_message(self, format, *args):
         return
 
-
-def make_key():
-    """
-    Generate a keyfile (using ssh-keygen)
-    """
-    keypath = os.path.expanduser('~/.ssh/ssossh-key')
+def rm_ssh_files(keypath):
     try:
         mode = os.stat(keypath).st_mode
         import stat
         if stat.S_ISREG(mode):
-            try:
-                pass
-                #rm_key_agent(keypath)
-            except subprocess.CalledProcessError:
-                pass
+
             try:
                 os.unlink(keypath)
             except FileNotFoundError:
@@ -81,10 +78,15 @@ def make_key():
                 pass
     except FileNotFoundError:
         pass
+
+def make_key(keypath):
+    """
+    Generate a keyfile (using ssh-keygen)
+    """
+    rm_ssh_files(keypath)
     subprocess.call(['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', keypath],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL)
-    return keypath
 
 
 def sign_cert(keypath, token, url):
@@ -118,17 +120,21 @@ def rm_key_agent(keypath):
                     stderr=subprocess.DEVNULL)
 
 
-def add_key_agent(keypath, expiry):
+def add_key_agent(keypath, expiry, agentsock=None):
     """
     Add the key and cert to the agent
     """
+    env = os.environ.copy()
+    if agentsock is not None:
+        env['SSH_AUTH_SOCK']=agentsock
     p = subprocess.Popen(['ssh-add', '-t',str(int(expiry)), keypath],
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
+                    stderr=subprocess.DEVNULL,
+                    env=env)
     (stdout, stderr) = p.communicate()
 
 
-def do_request(authservice):
+def do_request(authservice, httpd):
     """
     Open a web browser window
     and request an OAuth2 token to sign certificates
@@ -144,10 +150,8 @@ def do_request(authservice):
               redirect_uri + "&state=" + nonce + "&client_id=" +
               authservice['client_id'] + "&scope=" + authservice['scope'])
     webbrowser.open(requrl)
-    port = 4200
-    server_address = ('', port)
-    handler = partial(MyRequestHandler, port, authservice['logout'])
-    httpd = HTTPServer(server_address, handler)
+    #print('open a web browser to {}'.format(requrl))
+
     httpd.handle_request()
     httpd.handle_request()
     path = q.get()
@@ -213,16 +217,24 @@ def main():
     from . import config
     import os
     import sys
-    if len(sys.argv) > 1:
-        with open(sys.argv[1],'r') as f:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c','--config', default="~/.authservers.json",help="JSON format config file containing the list of places we can log into")
+    parser.add_argument('-k','--keypath',default=None,help="Path to store the ssh key (and certificate)")
+    parser.add_argument('-a','--agentsock',default=None,help='SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using')
+    args = parser.parse_args()
+
+
+    configpath = os.path.expanduser(args.config)
+
+    if os.path.exists(configpath):
+        with open(configpath,'r') as f:
             config = json.loads(f.read())
     else:
-        if os.path.exists(os.path.expanduser('~/.authservers.json')):
-            with open(os.path.expanduser('~/.authservers.json'),'r') as f:
-                config = json.loads(f.read())
-        else:
-            with pkg_resources.open_text(config,'authservers.json') as f:
-                config = json.loads(f.read())
+        print('No config file available')
+        print('either specify a json config file or store one at ~/.authservers.json')
+        sys.exit(1)
 
     if len(config) > 1:
         service = select_service(config)
@@ -230,9 +242,35 @@ def main():
         service = 0
     authservice = config[service]
 
-    token = do_request(authservice)
-    path = make_key()
+    try:
+        port = 4200
+        server_address = ('', port)
+        handler = partial(MyRequestHandler, port, authservice['logout'])
+        httpd = HTTPServer(server_address, handler)
+    except OSError as e:
+        print("Port 4200 is in use")
+        print("This script needs to listen for a connection on port 4200")
+        print("This allows the web browser to send data back to this script (a process which is intentionally difficult to prevent web browsers leaking information)")
+        sys.exit(1)
+
+    token = do_request(authservice, httpd)
+    import tempfile
+
+    if args.keypath is not None:
+        path = args.keypath
+    else:
+        f = tempfile.NamedTemporaryFile(delete=False)
+        f.close()
+        path = f.name
+    print('generateing a new key at {}'.format(path))
+    make_key(path)
     sign_cert(path, token, authservice['sign'])
     expiry = get_cert_expiry("{}-cert.pub".format(path))
     print("cert will expire {}".format(expiry))
-    add_key_agent(path, expiry.total_seconds())
+    try:
+        add_key_agent(path, expiry.total_seconds(), args.agentsock)
+    except subprocess.CalledProcessError:
+        print('unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
+        pass
+    if args.keypath is None:
+        rm_ssh_files(path)
