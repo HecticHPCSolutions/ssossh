@@ -18,7 +18,7 @@ long_description = 'Generate a SSH Certificate from an OAuth2 compliat cert serv
 setup(
     name='ssossh',
 
-    version='0.0.4',
+    version='0.0.5',
 
     description=long_description,
     long_description=long_description,

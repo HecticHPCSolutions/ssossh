@@ -1,18 +1,29 @@
-
+import argparse
+import datetime
 import json
-import webbrowser
 import os
-import queue
-import subprocess
+import sys
 import requests
-import pathlib
-from functools import partial
+import subprocess
+import queue
+import stat
+import tempfile
+import webbrowser
+import wget
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from functools import partial
+from pathlib import Path
+
 try:
     import importlib.resources as pkg_resources
 except ImportError:
     # Try backported to PY<37 `importlib_resources`.
     import importlib_resources as pkg_resources
+
+
+from . import templates
+from . import config
 
 q = queue.Queue()
 
@@ -24,6 +35,7 @@ class MyRequestHandler(BaseHTTPRequestHandler):
     a request parameter.
     The second run receives the token as a request parameter and puts it in the queue
     """
+
     def __init__(self, port, logout, *args, **kwargs):
         self.port = port
         self.logout = logout
@@ -35,11 +47,11 @@ class MyRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self, *args, **kwargs):
-        from . import templates
         with pkg_resources.open_text(templates,
-                'call_back.html') as f:
+                                     'call_back.html') as f:
             tsrc = f.read()
-            rsrc = tsrc.replace('{{ port }}',str(self.port)).replace('{{ logout }}',self.logout).encode()
+            rsrc = tsrc.replace('{{ port }}', str(self.port)).replace(
+                '{{ logout }}', self.logout).encode()
         if "callback" in self.path:
             self._set_headers()
             self.wfile.write(rsrc)
@@ -47,21 +59,23 @@ class MyRequestHandler(BaseHTTPRequestHandler):
             return
         if "favicon.ico" in self.path:
             print('favicon requested, send 404')
-            self.send_error(404,message="No favicon here")
+            self.send_error(404, message="No favicon here")
         if "extract" in self.path:
             self._set_headers()
             self.wfile.write(rsrc)
             self.send_response(200)
-            #self.send_response(204)
+            # self.send_response(204)
             self.wfile.write(b"")
             q.put(self.path)
+
     def log_message(self, format, *args):
         return
+
 
 def rm_ssh_files(keypath):
     try:
         mode = os.stat(keypath).st_mode
-        import stat
+
         if stat.S_ISREG(mode):
 
             try:
@@ -78,6 +92,7 @@ def rm_ssh_files(keypath):
                 pass
     except FileNotFoundError:
         pass
+
 
 def make_key(keypath):
     """
@@ -126,15 +141,15 @@ def add_key_agent(keypath, expiry, agentsock=None):
     """
     env = os.environ.copy()
     if agentsock is not None:
-        env['SSH_AUTH_SOCK']=agentsock
-    p = subprocess.Popen(['ssh-add', '-t',str(int(expiry)), keypath],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    env=env)
+        env['SSH_AUTH_SOCK'] = agentsock
+    p = subprocess.Popen(['ssh-add', '-t', str(int(expiry)), keypath],
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL,
+                         env=env)
     (stdout, stderr) = p.communicate()
 
 
-def do_request(authservice, httpd):
+def do_request(auth_service, httpd):
     """
     Open a web browser window
     and request an OAuth2 token to sign certificates
@@ -146,9 +161,9 @@ def do_request(authservice, httpd):
     """
     nonce = os.urandom(8).hex()
     redirect_uri = "http://localhost:4200/sshauthz_callback"
-    requrl = (authservice['authorise'] + "?response_type=token&redirect_uri=" +
+    requrl = (auth_service['authorise'] + "?response_type=token&redirect_uri=" +
               redirect_uri + "&state=" + nonce + "&client_id=" +
-              authservice['client_id'] + "&scope=" + authservice['scope'])
+              auth_service['client_id'] + "&scope=" + auth_service['scope'])
     webbrowser.open(requrl)
     #print('open a web browser to {}'.format(requrl))
 
@@ -161,7 +176,8 @@ def do_request(authservice, httpd):
     token = params[0].split('=')[1]
     state = params[1].split('=')[1]
     if not state == nonce:
-        raise Exception('OAuth2 error: A security check failed. Nonce is {} state is {}'.format(nonce,state))
+        raise Exception(
+            'OAuth2 error: A security check failed. Nonce is {} state is {}'.format(nonce, state))
     return token
 
 
@@ -175,7 +191,7 @@ def parse_cert_contents(lines):
             if key is not None:
                 res[key] = values
             values = []
-            (key,v) = l.split(':',1)
+            (key, v) = l.split(':', 1)
             v = v.lstrip().rstrip()
             if v != '':
                 values = [v]
@@ -186,25 +202,42 @@ def parse_cert_contents(lines):
 
 
 def get_cert_expiry(path):
-    import datetime
-    p = subprocess.Popen(['ssh-keygen','-L','-f',path],stdin=None,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    keygenout,keygenerr = p.communicate()
+    p = subprocess.Popen(['ssh-keygen', '-L', '-f', path],
+                         stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    keygenout, keygenerr = p.communicate()
     # Examine the cert to determine its expiry. Use the -t flag to automatically remove from the ssh-agent when the cert expires
     certcontents = parse_cert_contents(keygenout.decode().splitlines())
-    endtime = datetime.datetime.strptime(certcontents['Valid'][0].split()[3],"%Y-%m-%dT%H:%M:%S")
-    delta = endtime - datetime.datetime.now() # I *think* the output of ssh-keygen -L is in the current timezone even though I assume the certs validity is in UTC
+    endtime = datetime.datetime.strptime(
+        certcontents['Valid'][0].split()[3], "%Y-%m-%dT%H:%M:%S")
+    # I *think* the output of ssh-keygen -L is in the current timezone even though I assume the certs validity is in UTC
+    delta = endtime - datetime.datetime.now()
     return delta
 
 
 def select_service(config):
-    prompt="Enter the number of the site you would like to login to:\n"
-    n=0
-    for s in config:
-        n=n+1
-        prompt=prompt+"{}: {}\n".format(n,s['name'])
+    """
+    Prompt user for which site to login to
+    """
+    prompt = "Enter the number of the site you would like to login to:\n"
+    for i, site in enumerate(config):
+        prompt = f"{prompt} {i + 1}: {site['name']}\n"
 
-    v = input(prompt)
-    return int(v)-1
+    return int(input(prompt)) - 1
+
+
+def parse_consent(user_input):
+    """
+    Confirm if user input should be interpreted as a yes or a no
+    """
+    user_input = user_input.lower()
+    if user_input in ["y", "yes", "1"]:
+        return True
+    elif user_input in ["n", "no", "0"]:
+        return False
+    else:
+        print("Invalid input")
+        sys.exit(1)
+
 
 def main():
     """
@@ -214,38 +247,48 @@ def main():
     Use the OAuth2 token to create a certificate from the pub key
     Add the certificate to the users agent
     """
-    from . import config
-    import os
-    import sys
-    import argparse
-
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c','--config', default="~/.authservers.json",help="JSON format config file containing the list of places we can log into")
-    parser.add_argument('-k','--keypath',default=None,help="Path to store the ssh key (and certificate)")
-    parser.add_argument('-a','--agentsock',default=None,help='SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using')
+    parser.add_argument('-c', '--config', default="~/.authservers.json",
+                        help="JSON format config file containing the list of places we can log into")
+    parser.add_argument('-k', '--keypath', default=None,
+                        help="Path to store the ssh key (and certificate)")
+    parser.add_argument('-a', '--agentsock', default=None,
+                        help='SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using')
     args = parser.parse_args()
 
+    # Check if config exists
+    config_path = os.path.expanduser(args.config)
+    if not os.path.exists(config_path):
+        # If config can't be found, ask user if they'd like one to be generated
+        print("No config file available")
+        print("SSOSSH will look for a config at ~/.authservers.json unless specified with '-c'")
+        print("Would you have one created at ~/.authservers.json? ([Y]es/[N]o):")
+        
+        # If yes create and continue
+        if parse_consent(input()):
+            # wget.download(url, "~/.authservers.json")
+            wget.download(
+                "https://raw.githubusercontent.com/mitchellshargreaves-monash/ssossh/master/ssossh/config/authservers.json",
+                os.path.expanduser("~/.authservers.json")
+                )
+            with open(config_path, 'r') as f:
+                config = json.loads(f.read())
+        # If no exit
+        else:
+            sys.exit(1)
 
-    configpath = os.path.expanduser(args.config)
+    # Load config
+    with open(config_path, 'r') as f:
+        config = json.loads(f.read())
 
-    if os.path.exists(configpath):
-        with open(configpath,'r') as f:
-            config = json.loads(f.read())
-    else:
-        print('No config file available')
-        print('either specify a json config file or store one at ~/.authservers.json')
-        sys.exit(1)
+    # Prompt for which service if service doesn't exist
+    auth_service = config[select_service(config) if len(config) > 1 else 0]
 
-    if len(config) > 1:
-        service = select_service(config)
-    else:
-        service = 0
-    authservice = config[service]
-
+    # Connect to web browser for auth
     try:
         port = 4200
         server_address = ('', port)
-        handler = partial(MyRequestHandler, port, authservice['logout'])
+        handler = partial(MyRequestHandler, port, auth_service['logout'])
         httpd = HTTPServer(server_address, handler)
     except OSError as e:
         print("Port 4200 is in use")
@@ -253,24 +296,30 @@ def main():
         print("This allows the web browser to send data back to this script (a process which is intentionally difficult to prevent web browsers leaking information)")
         sys.exit(1)
 
-    token = do_request(authservice, httpd)
-    import tempfile
+    # Get token from request
+    token = do_request(auth_service, httpd)
 
+    # Parse keypath and create temp if not provided
     if args.keypath is not None:
         path = args.keypath
     else:
         f = tempfile.NamedTemporaryFile(delete=False)
         f.close()
         path = f.name
-    print('generateing a new key at {}'.format(path))
+
+    # Generate new key at the path
+    print(f"Generating a new key at {path}")
     make_key(path)
-    sign_cert(path, token, authservice['sign'])
-    expiry = get_cert_expiry("{}-cert.pub".format(path))
+    sign_cert(path, token, auth_service['sign'])
+    expiry = get_cert_expiry(f"{path}-cert.pub")
     print("cert will expire {}".format(expiry))
+
+    # Add key to agent
     try:
         add_key_agent(path, expiry.total_seconds(), args.agentsock)
     except subprocess.CalledProcessError:
-        print('unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
-        pass
+        print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
+
+    
     if args.keypath is None:
         rm_ssh_files(path)

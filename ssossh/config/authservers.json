@@ -1,5 +1,4 @@
 [
-
     {
       "authorise": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/oauth/authorize/choose",
       "base": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/",
