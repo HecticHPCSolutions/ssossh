@@ -73,6 +73,9 @@ class MyRequestHandler(BaseHTTPRequestHandler):
 
 
 def rm_ssh_files(keypath):
+    """
+    Clean up previous entries
+    """
     try:
         mode = os.stat(keypath).st_mode
 
@@ -100,8 +103,7 @@ def make_key(keypath):
     """
     rm_ssh_files(keypath)
     subprocess.call(['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', keypath],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
+                    stdout=subprocess.DEVNULL)
 
 
 def sign_cert(keypath, token, url):
@@ -113,7 +115,7 @@ def sign_cert(keypath, token, url):
     with open(keypath + '.pub', 'r') as f:
         pub_key = f.read()
     sess = requests.Session()
-    headers = {"Authorization": "Bearer {}".format(token)}
+    headers = {"Authorization": f"Bearer {token}"}
     data = {"public_key": pub_key}
     resp = sess.post(url, json=data, headers=headers, verify=True)
     try:
@@ -131,8 +133,7 @@ def rm_key_agent(keypath):
     Remove the key/cert from the agent
     """
     subprocess.call(['ssh-add', '-d', keypath],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL)
+                    stdout=subprocess.DEVNULL)
 
 
 def add_key_agent(keypath, expiry, agentsock=None):
@@ -144,7 +145,6 @@ def add_key_agent(keypath, expiry, agentsock=None):
         env['SSH_AUTH_SOCK'] = agentsock
     p = subprocess.Popen(['ssh-add', '-t', str(int(expiry)), keypath],
                          stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL,
                          env=env)
     (stdout, stderr) = p.communicate()
 
@@ -181,37 +181,61 @@ def do_request(auth_service, httpd):
     return token
 
 
-def parse_cert_contents(lines):
+def parse_cert_contents(path):
+    """
+    Parse certificate, returning a dictionary of its contents
+    """
+    # Read certificate
+    p = subprocess.Popen(['ssh-keygen', '-L', '-f', path],
+                         stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    keygenout, keygenerr = p.communicate()
+    lines = keygenout.decode().splitlines()
+    
+    # Convert certificate to dictionary
     key = None
     values = []
-    res = {}
+    cert_contents = {}
+
+    # Iterate through lines
     for l in lines:
         l = l.rstrip().lstrip()
+        
         if ':' in l:
             if key is not None:
-                res[key] = values
+                cert_contents[key] = values
+
             values = []
             (key, v) = l.split(':', 1)
             v = v.lstrip().rstrip()
             if v != '':
                 values = [v]
+
         else:
             if l != '':
                 values.append(l)
-    return res
+    return cert_contents
 
 
 def get_cert_expiry(path):
-    p = subprocess.Popen(['ssh-keygen', '-L', '-f', path],
-                         stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    keygenout, keygenerr = p.communicate()
-    # Examine the cert to determine its expiry. Use the -t flag to automatically remove from the ssh-agent when the cert expires
-    certcontents = parse_cert_contents(keygenout.decode().splitlines())
+    """
+    Use parse_cert_contents to get Parse certificate, returning a dictionary of its contents
+    """
+    cert_contents = parse_cert_contents(path)
     endtime = datetime.datetime.strptime(
-        certcontents['Valid'][0].split()[3], "%Y-%m-%dT%H:%M:%S")
+        cert_contents['Valid'][0].split()[3], "%Y-%m-%dT%H:%M:%S")
+    
     # I *think* the output of ssh-keygen -L is in the current timezone even though I assume the certs validity is in UTC
     delta = endtime - datetime.datetime.now()
     return delta
+
+def get_cert_user(path):
+    """
+    Use parse_cert_contents to get Parse certificate, returning a dictionary of its contents
+    Returns first Principal - users with more than one will need to add support for their other users manually
+    These users are assumed to be admins with the abilities to do so themselves
+    """
+    cert_contents = parse_cert_contents(path)
+    return cert_contents['Principals'][0]
 
 
 def select_service(config):
@@ -225,15 +249,25 @@ def select_service(config):
     return int(input(prompt)) - 1
 
 
-def parse_consent(user_input):
+def parse_consent(yes):
     """
     Confirm if user input should be interpreted as a yes or a no
+    Uses global --yes argument as input
     """
-    user_input = user_input.lower()
+    # Skip if --yes
+    if yes:
+        return True
+
+    # Prompt user
+    user_input = input().lower()
+
+    # Parse True/False
     if user_input in ["y", "yes", "1"]:
         return True
     elif user_input in ["n", "no", "0"]:
         return False
+    
+    # Unexpected value
     else:
         print("Invalid input")
         sys.exit(1)
@@ -248,12 +282,18 @@ def main():
     Add the certificate to the users agent
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', default="~/.authservers.json",
+    parser.add_argument("-c", "--config", default="~/.authservers.json",
                         help="JSON format config file containing the list of places we can log into")
-    parser.add_argument('-k', '--keypath', default=None,
+    parser.add_argument("-k", "--keypath", default=None,
                         help="Path to store the ssh key (and certificate)")
-    parser.add_argument('-a', '--agentsock', default=None,
-                        help='SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using')
+    parser.add_argument("-a", "--agentsock", default=None,
+                        help="SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using")
+    parser.add_argument("--setssh", action="store_true",
+                        help="Add an entry to your ssh config")
+    parser.add_argument("-sc", "--sshconfig", default=os.path.expanduser("~/.ssh/config"),
+                        help="The ssh config to modify")
+    parser.add_argument("-y", "--yes", action="store_true",
+                        help="Yes to all")
     args = parser.parse_args()
 
     # Check if config exists
@@ -262,10 +302,14 @@ def main():
         # If config can't be found, ask user if they'd like one to be generated
         print("No config file available")
         print("SSOSSH will look for a config at ~/.authservers.json unless specified with '-c'")
-        print("Would you have one created at ~/.authservers.json? ([Y]es/[N]o):")
+
+        if args.yes:
+            print("Creating a key created at ~/.authservers.json")
+        else:
+            print("Would you have your key created at ~/.authservers.json? ([Y]es/[N]o):")
         
         # If yes create and continue
-        if parse_consent(input()):
+        if parse_consent(args.yes):
             # wget.download(url, "~/.authservers.json")
             wget.download(
                 "https://raw.githubusercontent.com/mitchellshargreaves-monash/ssossh/master/ssossh/config/authservers.json",
@@ -303,23 +347,61 @@ def main():
     if args.keypath is not None:
         path = args.keypath
     else:
-        f = tempfile.NamedTemporaryFile(delete=False)
-        f.close()
-        path = f.name
+        path = os.path.expanduser(f"~\.ssh\{auth_service['name']}")
+
+        print("No keypath provided.")
+        if args.yes:
+            print(f"Creating a key at {path}")
+        else:
+            print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
+        
+        # If no, do not continue
+        if not parse_consent(args.yes):
+            sys.exit(1)
 
     # Generate new key at the path
     print(f"Generating a new key at {path}")
     make_key(path)
     sign_cert(path, token, auth_service['sign'])
     expiry = get_cert_expiry(f"{path}-cert.pub")
-    print("cert will expire {}".format(expiry))
+    print(f"Cert will expire {expiry}")
 
     # Add key to agent
-    try:
-        add_key_agent(path, expiry.total_seconds(), args.agentsock)
-    except subprocess.CalledProcessError:
-        print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
-
+    # Deprecated in favour of permanently creating a key
+    # try:
+    #     add_key_agent(path, expiry.total_seconds(), args.agentsock)
+    # except subprocess.CalledProcessError:
+    #     print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
     
-    if args.keypath is None:
-        rm_ssh_files(path)
+    # if args.keypath is None:
+    #     rm_ssh_files(path)
+    
+    # Optionally add to ssh config
+    if args.setssh:
+        print("You've selected to set up your ssh config for ssossh.")
+        print("This will add two entries to your ssh config. One for the login node, and one for a compute job.")
+
+        if not args.yes:
+            print("Would you like to continue? ([Y]es/[N]o):")
+
+        # Confirm with user
+        if parse_consent(args.yes):
+            with open(args.sshconfig, "a") as ssh_config:
+                ssh_command = "ssh.exe" if sys.platform == "win32" else "ssh"
+                user = get_cert_user(f"{path}-cert.pub")
+                
+                # Login node
+                ssh_config.write("\n\n")
+                ssh_config.write(f"Host {user}_{auth_service['name']}\n")
+                ssh_config.write(f"\tHostName {auth_service['login']}\n")
+                ssh_config.write(f"\tUser {user}\n")
+                ssh_config.write(f"\tIdentityFile {path}\n\n")
+
+                # Compute job
+                ssh_config.write(f"Host {user}_{auth_service['name']}_job\n")
+                ssh_config.write(f"\tHostName {user}_{auth_service['name']}_job\n")
+                ssh_config.write(f"\tUser {user}\n")
+                ssh_config.write(f"\tProxyCommand {ssh_command} -i {path} {user}@{auth_service['login']} {auth_service['proxy']}\n")
+        else:
+            sys.exit(1)
+
