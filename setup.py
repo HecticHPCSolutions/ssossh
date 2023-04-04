@@ -13,15 +13,15 @@ from os import path
 
 here = path.abspath(path.dirname(__file__))
 
-long_description = 'Generate a SSH Certificate from an OAuth2 compliat cert server'
+description = 'Generates a SSH Certificate from an OAuth2 compliant cert server.'
 
 setup(
     name='ssossh',
 
     version='0.0.5',
 
-    description=long_description,
-    long_description=long_description,
+    description=description,
+    long_description=description + " Intended to improve the user experience for connecting to remote services through the terminal or VSCode without the need for issuing user password.",
     include_package_data=True,
 
     # The project's main homepage.
