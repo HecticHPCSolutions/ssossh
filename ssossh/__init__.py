@@ -31,7 +31,7 @@ q = queue.Queue()
 class MyRequestHandler(BaseHTTPRequestHandler):
     """
     The request handler runs twice. Once serves a snippet of
-    javascript which takes the token in the URL framgment and puts in into
+    javascript which takes the token in the URL fragment and puts in into
     a request parameter.
     The second run receives the token as a request parameter and puts it in the queue
     """
@@ -401,6 +401,7 @@ def main():
                 ssh_config.write(f"Host {user}_{auth_service['name']}_job\n")
                 ssh_config.write(f"\tHostName {user}_{auth_service['name']}_job\n")
                 ssh_config.write(f"\tUser {user}\n")
+                ssh_config.write(f"\tIdentityFile {path}\n")
                 ssh_config.write(f"\tProxyCommand {ssh_command} -i {path} {user}@{auth_service['login']} {auth_service['proxy']}\n")
         else:
             sys.exit(1)
