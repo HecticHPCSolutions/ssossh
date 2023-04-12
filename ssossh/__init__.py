@@ -286,11 +286,13 @@ def main():
                         help="JSON format config file containing the list of places we can log into")
     parser.add_argument("-k", "--keypath", default=None,
                         help="Path to store the ssh key (and certificate)")
+    parser.add_argument("--agent", action="store_true",
+                        help="Use the ssh agent rather than saving the key")
     parser.add_argument("-a", "--agentsock", default=None,
                         help="SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using")
     parser.add_argument("--setssh", action="store_true",
                         help="Add an entry to your ssh config")
-    parser.add_argument("-sc", "--sshconfig", default=os.path.expanduser("~/.ssh/config"),
+    parser.add_argument("--sshconfig", default=os.path.expanduser("~/.ssh/config"),
                         help="The ssh config to modify")
     parser.add_argument("-y", "--yes", action="store_true",
                         help="Yes to all")
@@ -343,9 +345,17 @@ def main():
     # Get token from request
     token = do_request(auth_service, httpd)
 
-    # Parse keypath and create temp if not provided
+    # Parse keypath
     if args.keypath is not None:
         path = args.keypath
+    
+    # Create temp if using agent
+    elif args.agent:
+        f = tempfile.NamedTemporaryFile(delete=False)
+        f.close()
+        path = f.name
+
+    # Else use name of service to construct path
     else:
         path = os.path.expanduser(f"~\.ssh\{auth_service['name']}")
 
@@ -366,15 +376,15 @@ def main():
     expiry = get_cert_expiry(f"{path}-cert.pub")
     print(f"Cert will expire {expiry}")
 
-    # Add key to agent
-    # Deprecated in favour of permanently creating a key
-    # try:
-    #     add_key_agent(path, expiry.total_seconds(), args.agentsock)
-    # except subprocess.CalledProcessError:
-    #     print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
-    
-    # if args.keypath is None:
-    #     rm_ssh_files(path)
+    # Add key to agent and clean up
+    if args.agent:
+        try:
+            add_key_agent(path, expiry.total_seconds(), args.agentsock)
+        except subprocess.CalledProcessError:
+            print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
+        
+        if args.keypath is None:
+            rm_ssh_files(path)
     
     # Optionally add to ssh config
     if args.setssh:
