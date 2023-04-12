@@ -18,13 +18,16 @@ JSON format config file containing the list of places we can log into
 `"-k", "--keypath", default=None`
 Path to store the ssh key (and certificate)
 
+`"--agent", actin="store_true"`
+Use the ssh agent rather than saving the key
+
 `"-a", "--agentsock", default=None`
 SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using
 
 `"--setssh", action="store_true"`
 Add an entry to your ssh config
 
-`"-sc", "--sshconfig", default=os.path.expanduser("~/.ssh/config")`
+"--sshconfig", default=os.path.expanduser("~/.ssh/config")`
 The ssh config to modify
 
 `"-y", "--yes", action="store_true"`
