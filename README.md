@@ -1,7 +1,13 @@
 # SSOSSH
 
 ## Installation
-`pip install ssossh`
+```
+pip install git+https://github.com/mitchellshargreaves-monash/ssossh
+```
+Or if you want to test an experimental feature:
+```
+pip install git+https://github.com/mitchellshargreaves-monash/ssossh@branch-name
+```
 
 ## Description
 Generates a SSH Certificate from an OAuth2 compliant cert server.
