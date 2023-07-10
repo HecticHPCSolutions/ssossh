@@ -1,0 +1,41 @@
+<html>
+    <head>
+        <link rel="icon" href="data:,">
+    </head>
+    <body>
+        If you wish to log out please open <a href={{ logout }}>{{ logout }}</a>
+        <p>
+        You may now close this window
+    </body>
+    <script>
+        function reqListener () {
+        }
+        let frag = window.location.hash;
+        tokenmatch = frag.match(/access_token\=([^&]+)(&|$)/);
+        statematch = frag.match(/state\=([^&]+)(&|$)/);
+        let accesstoken = tokenmatch[1];
+        let state = statematch[1];
+        console.log(accesstoken);
+        console.log(state);
+
+        try {
+            xhttp = new XMLHttpRequest();
+            xhttp.addEventListener("load", reqListener);
+            xhttp.open("GET",'http://localhost:{{ port }}/extract?token='+accesstoken+'&state='+state);
+            xhttp.send()
+        } catch(err) {
+            console.error(err)
+        }
+/*        try {
+            xhttp = new XMLHttpRequest();
+            let logouturl = '{{ logout }}';
+            xhttp.open("GET",logouturl,true);
+            console.log('calling logout',logouturl);
+            xhttp.withCredentials=true;
+            xhttp.send(null);
+        } catch(err) {
+            console.error(err);
+        } */
+    </script>
+</html>
+
