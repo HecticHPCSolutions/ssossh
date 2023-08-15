@@ -357,7 +357,7 @@ def main():
 
     # Else use name of service to construct path
     else:
-        path = os.path.expanduser(f"~\.ssh\{auth_service['name']}")
+        path = os.path.expanduser(f"~/.ssh/{auth_service['name']}")
 
         print("No keypath provided.")
         if args.yes:
