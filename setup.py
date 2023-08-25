@@ -18,7 +18,7 @@ description = 'Generates a SSH Certificate from an OAuth2 compliant cert server.
 setup(
     name='ssossh',
 
-    version='0.0.5',
+    version='0.0.6',
 
     description=description,
     long_description=description + " Intended to improve the user experience for connecting to remote services through the terminal or VSCode without the need for issuing user password.",

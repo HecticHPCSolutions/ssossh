@@ -1,15 +1,15 @@
 import argparse
 import datetime
 import json
-import os
-import sys
-import requests
-import subprocess
-import queue
-import stat
 import tempfile
+import os
+import queue
+import requests
+import stat
+import subprocess
+import sys
+import urllib.request
 import webbrowser
-import wget
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from functools import partial
@@ -262,7 +262,7 @@ def parse_consent(yes):
     user_input = input().lower()
 
     # Parse True/False
-    if user_input in ["y", "yes", "1"]:
+    if user_input in ["y", "yes", "1", ""]:
         return True
     elif user_input in ["n", "no", "0"]:
         return False
@@ -308,14 +308,14 @@ def main():
         if args.yes:
             print("Creating a key created at ~/.authservers.json")
         else:
-            print("Would you have your key created at ~/.authservers.json? ([Y]es/[N]o):")
+            print("Would you have your key created at ~/.authservers.json? ([Y]es/[n]o):")
         
         # If yes create and continue
         if parse_consent(args.yes):
             # wget.download(url, "~/.authservers.json")
-            wget.download(
+            urllib.request.urlretrieve(
                 "https://raw.githubusercontent.com/mitchellshargreaves-monash/ssossh/master/ssossh/config/authservers.json",
-                os.path.expanduser("~/.authservers.json")
+                filename=os.path.expanduser("~/.authservers.json")
                 )
             with open(config_path, 'r') as f:
                 config = json.loads(f.read())
@@ -363,7 +363,7 @@ def main():
         if args.yes:
             print(f"Creating a key at {path}")
         else:
-            print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
+            print(f"Would you like to create a key at {path}? ([Y]es/[n]o):")
         
         # If no, do not continue
         if not parse_consent(args.yes):
@@ -392,7 +392,7 @@ def main():
         print("This will add two entries to your ssh config. One for the login node, and one for a compute job.")
 
         if not args.yes:
-            print("Would you like to continue? ([Y]es/[N]o):")
+            print("Would you like to continue? ([Y]es/[n]o):")
 
         # Confirm with user
         if parse_consent(args.yes):
