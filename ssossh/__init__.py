@@ -298,6 +298,8 @@ def main():
                         help="The ssh config to modify")
     parser.add_argument("-y", "--yes", action="store_true",
                         help="Yes to all")
+    parser.add_argument( "--defaultpath", action="store_true",
+                        help="Yes to all")
     args = parser.parse_args()
 
     # Check if config exists
@@ -352,7 +354,7 @@ def main():
         path = args.keypath
     
     # Create temp if using agent
-    elif args.agent:
+    elif args.agent and args.keypath is None:
         f = tempfile.NamedTemporaryFile(delete=False)
         f.close()
         path = f.name
@@ -367,6 +369,16 @@ def main():
         else:
             print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
         
+        # If no, do not continue
+        if not parse_consent(args.yes):
+            sys.exit(1)
+    if args.defaultpath:
+        path = os.path.expanduser(os.path.join('~','.ssh',f"{auth_service['name']}"))
+        print("No keypath provided.")
+        if args.yes:
+            print(f"Creating a key at {path}")
+        else:
+            print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
         # If no, do not continue
         if not parse_consent(args.yes):
             sys.exit(1)
@@ -385,7 +397,7 @@ def main():
         except subprocess.CalledProcessError:
             print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
         
-        if args.keypath is None:
+        if args.keypath is None and not args.defaultpath:
             rm_ssh_files(path)
     
     # Optionally add to ssh config
