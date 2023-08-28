@@ -38,3 +38,6 @@ The ssh config to modify
 
 `"-y", "--yes", action="store_true"`  
 Yes to all
+
+`"--defaultpath", action="store_true"`
+When adding the key to the agent, use the usual file path rather than a temp file
