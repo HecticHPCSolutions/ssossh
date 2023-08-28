@@ -14,7 +14,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from functools import partial
 from pathlib import Path
 
-AUTHSERVERCONFIG="https://raw.githubusercontent.com/mitchellshargreaves-monash/ssossh/master/ssossh/config/authservers.json"
+AUTHSERVERCONFIG="https://raw.githubusercontent.com/HecticHPCSolutions/ssossh/main/ssossh/config/authservers.json"
 
 try:
     import importlib.resources as pkg_resources
@@ -316,7 +316,6 @@ def main():
         
         # If yes create and continue
         if parse_consent(args.yes):
-            # wget.download(url, "~/.authservers.json")
             s=requests.Session()
             r = s.get(AUTHSERVERCONF)
             with open(os.path.expanduser(os.path.join('~','.authservers.json')),'w') as f:

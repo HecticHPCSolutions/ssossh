@@ -2,11 +2,11 @@
 
 ## Installation
 ```
-pip install git+https://github.com/mitchellshargreaves-monash/ssossh
+pip install git+https://github.com/HecticHPCSolutions/ssossh
 ```
 Or if you want to test an experimental feature:
 ```
-pip install git+https://github.com/mitchellshargreaves-monash/ssossh@branch-name
+pip install git+https://github.com/HecticHPCSolutions/ssossh@branch-name
 ```
 
 ## Description
