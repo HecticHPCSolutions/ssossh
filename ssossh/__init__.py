@@ -299,7 +299,7 @@ def main():
     parser.add_argument("-y", "--yes", action="store_true",
                         help="Yes to all")
     parser.add_argument( "--defaultpath", action="store_true",
-                        help="Yes to all")
+                        help="When adding the key to the agent, use the usual file path rather than a temp file")
     args = parser.parse_args()
 
     # Check if config exists
@@ -349,39 +349,42 @@ def main():
     # Get token from request
     token = do_request(auth_service, httpd)
 
+    # Where do we store the key and should we remove it
+    # i) user gave us a keypath => save the key at the keypath
+    # ii) user wants to use the agent and DIDN'T specify => use a temp key and don't save
+    # iii) user wants to use the agent and asked for the default => Save at the default location.
+    # iv) user didn't specify anything => Prompt for consent to save at the default location.
+
+    rmkey = True # By default we will remove the key file form disk after loading it into the agent
     # Parse keypath
     if args.keypath is not None:
         path = args.keypath
+        rmkey = False
     
     # Create temp if using agent
     elif args.agent and args.keypath is None:
         f = tempfile.NamedTemporaryFile(delete=False)
         f.close()
         path = f.name
+        rmkey = True
 
     # Else use name of service to construct path
     else:
         path = os.path.expanduser(os.path.join('~','.ssh',f"{auth_service['name']}"))
+        rmkey = True
 
-        print("No keypath provided.")
+    # Should we save the key after loading to the agent (not rmkey)
+    # if the keypath was already specified, save the key
+    # if -y was specified, save the key
+    # otherwise prompt to save the key
+    if rmkey:
         if args.yes:
             print(f"Creating a key at {path}")
+            rmkey = False
         else:
             print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
-        
-        # If no, do not continue
-        if not parse_consent(args.yes):
-            sys.exit(1)
-    if args.defaultpath:
-        path = os.path.expanduser(os.path.join('~','.ssh',f"{auth_service['name']}"))
-        print("No keypath provided.")
-        if args.yes:
-            print(f"Creating a key at {path}")
-        else:
-            print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
-        # If no, do not continue
-        if not parse_consent(args.yes):
-            sys.exit(1)
+        if parse_consent(args.yes):
+            rmkey = False
 
     # Generate new key at the path
     print(f"Generating a new key at {path}")
@@ -397,8 +400,8 @@ def main():
         except subprocess.CalledProcessError:
             print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
         
-        if args.keypath is None and not args.defaultpath:
-            rm_ssh_files(path)
+    if rmkey:
+        rm_ssh_files(path)
     
     # Optionally add to ssh config
     if args.setssh:

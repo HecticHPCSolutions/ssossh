@@ -1,0 +1,15 @@
+[
+  {
+    "authorise": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/oauth/authorize/choose",
+    "base": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/",
+    "client_id": "Q96kt2Vtw6S78dpORktM81DH",
+    "sign": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/sign/monash_hpcid/api/v1/sign_key",
+    "logout": "https://sshauthz-dev.cloud.cvl.org.au/pysshauthz/oauth2/logout",
+    "login": "m3.massive.org.au",
+    "proxy": "/usr/local/sv2/sshnc.sh",
+    "name": "CVL",
+    "icon": null,
+    "scope": "user:email",
+    "desc": "<div><div>Don't have an account?</div><div style=\"height:25px\"></div><div><a href=https://docs.massive.org.au/M3/requesting-an-account.html style=\"text-decoration: none\">Signup</a></div><div style=\"height:25px\"></div></div>"
+  }
+]

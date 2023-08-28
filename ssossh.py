@@ -1,0 +1,2 @@
+import ssossh
+ssossh.main()
