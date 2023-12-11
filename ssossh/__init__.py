@@ -15,8 +15,6 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from functools import partial
 from pathlib import Path
 
-AUTHSERVERCONFIG="https://raw.githubusercontent.com/HecticHPCSolutions/ssossh/main/ssossh/config/authservers.json"
-
 try:
     import importlib.resources as pkg_resources
 except ImportError:
@@ -282,6 +280,7 @@ def main():
     Use the OAuth2 token to create a certificate from the pub key
     Add the certificate to the users agent
     """
+    default_authconfig_url="https://raw.githubusercontent.com/HecticHPCSolutions/ssossh/main/ssossh/config/authservers.json"
     default_authconfig = os.path.expanduser(os.path.join('~','.authservers.json'))
     default_sshconfig = os.path.expanduser(os.path.join('~','.ssh','config'))
     parser = argparse.ArgumentParser()
@@ -317,8 +316,7 @@ def main():
         
         # If yes create and continue
         if parse_consent(args.yes):
-            # wget.download(url, "~/.authservers.json")
-            urllib.request.urlretrieve(AUTHSERVERCONFIG, filename=os.path.expanduser("~/.authservers.json"))
+            urllib.request.urlretrieve(default_authconfig_url, filename=os.path.expanduser("~/.authservers.json"))
             with open(config_path, 'r') as f:
                 config = json.loads(f.read())
         # If no exit
@@ -380,17 +378,9 @@ def main():
             print(f"Creating a key at {path}")
             rmkey = False
         else:
-<<<<<<< HEAD
-            print(f"Would you like to create a key at {path}? ([Y]es/[n]o):")
-        
-        # If no, do not continue
-        if not parse_consent(args.yes):
-            sys.exit(1)
-=======
             print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
-        if parse_consent(args.yes):
-            rmkey = False
->>>>>>> main
+            if parse_consent(args.yes):
+                rmkey = False
 
     # Generate new key at the path
     print(f"Generating a new key at {path}")
