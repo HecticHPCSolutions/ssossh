@@ -2,11 +2,11 @@
 
 ## Installation
 ```
-pip install git+https://github.com/mitchellshargreaves-monash/ssossh
+pip install git+https://github.com/HecticHPCSolutions/ssossh
 ```
 Or if you want to test an experimental feature:
 ```
-pip install git+https://github.com/mitchellshargreaves-monash/ssossh@branch-name
+pip install git+https://github.com/HecticHPCSolutions/ssossh@branch-name
 ```
 
 ## Description
@@ -38,3 +38,6 @@ The ssh config to modify
 
 `"-y", "--yes", action="store_true"`  
 Yes to all
+
+`"--defaultpath", action="store_true"`  
+When adding the key to the agent, use the usual file path rather than a temp file

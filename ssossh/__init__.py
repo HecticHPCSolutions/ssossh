@@ -15,6 +15,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from functools import partial
 from pathlib import Path
 
+AUTHSERVERCONFIG="https://raw.githubusercontent.com/HecticHPCSolutions/ssossh/main/ssossh/config/authservers.json"
+
 try:
     import importlib.resources as pkg_resources
 except ImportError:
@@ -23,7 +25,6 @@ except ImportError:
 
 
 from . import templates
-from . import config
 
 q = queue.Queue()
 
@@ -281,8 +282,10 @@ def main():
     Use the OAuth2 token to create a certificate from the pub key
     Add the certificate to the users agent
     """
+    default_authconfig = os.path.expanduser(os.path.join('~','.authservers.json'))
+    default_sshconfig = os.path.expanduser(os.path.join('~','.ssh','config'))
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", default="~/.authservers.json",
+    parser.add_argument("-c", "--config", default=default_authconfig,
                         help="JSON format config file containing the list of places we can log into")
     parser.add_argument("-k", "--keypath", default=None,
                         help="Path to store the ssh key (and certificate)")
@@ -292,10 +295,12 @@ def main():
                         help="SSH Agent socket (eg the value os SSH_AUTH_SOCK variable). Default is to use whatever this terminal is using")
     parser.add_argument("--setssh", action="store_true",
                         help="Add an entry to your ssh config")
-    parser.add_argument("--sshconfig", default=os.path.expanduser("~/.ssh/config"),
+    parser.add_argument("--sshconfig", default=default_sshconfig,
                         help="The ssh config to modify")
     parser.add_argument("-y", "--yes", action="store_true",
                         help="Yes to all")
+    parser.add_argument( "--defaultpath", action="store_true",
+                        help="When adding the key to the agent, use the usual file path rather than a temp file")
     args = parser.parse_args()
 
     # Check if config exists
@@ -313,10 +318,7 @@ def main():
         # If yes create and continue
         if parse_consent(args.yes):
             # wget.download(url, "~/.authservers.json")
-            urllib.request.urlretrieve(
-                "https://raw.githubusercontent.com/mitchellshargreaves-monash/ssossh/master/ssossh/config/authservers.json",
-                filename=os.path.expanduser("~/.authservers.json")
-                )
+            urllib.request.urlretrieve(AUTHSERVERCONFIG, filename=os.path.expanduser("~/.authservers.json"))
             with open(config_path, 'r') as f:
                 config = json.loads(f.read())
         # If no exit
@@ -345,29 +347,50 @@ def main():
     # Get token from request
     token = do_request(auth_service, httpd)
 
+    # Where do we store the key and should we remove it
+    # i) user gave us a keypath => save the key at the keypath
+    # ii) user wants to use the agent and DIDN'T specify => use a temp key and don't save
+    # iii) user wants to use the agent and asked for the default => Save at the default location.
+    # iv) user didn't specify anything => Prompt for consent to save at the default location.
+
+    rmkey = True # By default we will remove the key file form disk after loading it into the agent
     # Parse keypath
     if args.keypath is not None:
         path = args.keypath
+        rmkey = False
     
     # Create temp if using agent
-    elif args.agent:
+    elif args.agent and args.keypath is None:
         f = tempfile.NamedTemporaryFile(delete=False)
         f.close()
         path = f.name
+        rmkey = True
 
     # Else use name of service to construct path
     else:
-        path = os.path.expanduser(os.path.join('~', '.ssh', auth_service['name']))
+        path = os.path.expanduser(os.path.join('~','.ssh',f"{auth_service['name']}"))
+        rmkey = True
 
-        print("No keypath provided.")
+    # Should we save the key after loading to the agent (not rmkey)
+    # if the keypath was already specified, save the key
+    # if -y was specified, save the key
+    # otherwise prompt to save the key
+    if rmkey:
         if args.yes:
             print(f"Creating a key at {path}")
+            rmkey = False
         else:
+<<<<<<< HEAD
             print(f"Would you like to create a key at {path}? ([Y]es/[n]o):")
         
         # If no, do not continue
         if not parse_consent(args.yes):
             sys.exit(1)
+=======
+            print(f"Would you like to create a key at {path}? ([Y]es/[N]o):")
+        if parse_consent(args.yes):
+            rmkey = False
+>>>>>>> main
 
     # Generate new key at the path
     print(f"Generating a new key at {path}")
@@ -383,8 +406,8 @@ def main():
         except subprocess.CalledProcessError:
             print('Unable to add the certificate to the agent. Is SSH_AUTH_SOCK set correctly?')
         
-        if args.keypath is None:
-            rm_ssh_files(path)
+    if rmkey:
+        rm_ssh_files(path)
     
     # Optionally add to ssh config
     if args.setssh:
